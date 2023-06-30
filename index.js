@@ -16,7 +16,7 @@ app.post('/register',async (req, res)=>{
     const user = await user_model.findOne({email:req.body.email})
 
     if(user){
-        res.status(400).send({"err":"User already exists"})
+        res.status(200).send({"err":"User already exists"})
     }else{
         const salt = await bcrypt.genSalt(10)
         const hashedPassword = await bcrypt.hash(req.body.password,salt)
@@ -50,14 +50,14 @@ app.post('/login', async (req, res)=>{
         if(!validate_password){
             res.status(403).send({"err":"Incorrect password"})
         }else{
-            const token = jwt.sign({_id:user.id},"secret1234")
+            const token = jwt.sign({_id:user.id,name:user.name,company:user.company},"secret1234")
             res.status(200).send({"token":token})
         }
     }
 })
 
 app.get('/latest-jobs', async (req,res)=>{
-    const job = await job_model.find().sort({created_at:-1})
+    const job = await job_model.find().sort({created_at:-1}).populate('company','-_id name').select('-_id -applications');
     res.send(job)
 })
 
@@ -103,15 +103,93 @@ app.post('/apply-job', (req, res, next)=>{
     }
 })
 
-app.post('/post-job',(req,res,next)=>{
+app.get('/get-applications',(req,res,next)=>{
     const token = req.header("auth-token")
+    console.log(token)
     if(!token){
         res.status(403).send({"err":"Not Authorised"})
     }else{
         try{
             const verify = jwt.verify(token, "secret1234")
             next()
-        }catch{
+        }catch(err){
+            console.log(err.message)
+            res.status(400).send("Invalid token")
+        }
+    }
+},async (req, res)=>{
+    const id = jwt.decode(req.header("auth-token"),"secret1234")._id
+    const user = await user_model.findOne({_id:id})
+    //const job = await job_model.find().sort({created_at:-1}).populate('company','-_id name').select('-_id -applications');
+    if(user.company===false){
+        const usr = await user_model.findOne({_id:id}, '-_id applications').populate({
+            path: 'applications',
+            select: '-_id applying_for',
+            populate: {
+              path: 'applying_for',
+              select: ''
+            }
+          })
+        console.log(req.body)
+        try{
+            res.status(200).send(usr)
+        }catch(err){
+            console.log(err.message)
+        }
+    }else{
+        res.status(403).send({"err":"You don't have permission"})
+    }
+})
+
+app.get('/get-jobs',(req,res,next)=>{
+    const token = req.header("auth-token")
+    console.log(token)
+    if(!token){
+        res.status(403).send({"err":"Not Authorised"})
+    }else{
+        try{
+            const verify = jwt.verify(token, "secret1234")
+            next()
+        }catch(err){
+            console.log(err.message)
+            res.status(400).send("Invalid token")
+        }
+    }
+},async (req, res)=>{
+    const id = jwt.decode(req.header("auth-token"),"secret1234")._id
+    const user = await user_model.findOne({_id:id})
+    //const job = await job_model.find().sort({created_at:-1}).populate('company','-_id name').select('-_id -applications');
+    if(user.company===true){
+        const usr = await user_model.findOne({_id:id}, '-_id jobs_posted').populate({
+            path: 'jobs_posted',
+            select: '-_id',
+            populate: {
+              path: 'company',
+              select: '-_id name'
+            }
+          })
+        console.log(req.body)
+        try{
+            res.status(200).send(usr)
+        }catch(err){
+            console.log(err.message)
+        }
+    }else{
+        res.status(403).send({"err":"You don't have permission"})
+    }
+})
+
+app.post('/post-job',(req,res,next)=>{
+    const token = req.header("auth-token")
+    console.log(token)
+    if(!token){
+        res.status(403).send({"err":"Not Authorised"})
+    }else{
+        try{
+            const verify = jwt.verify(token, "secret1234")
+            next()
+        }catch(err){
+            console.log(err.message)
             res.status(400).send("Invalid token")
         }
     }
@@ -125,7 +203,8 @@ app.post('/post-job',(req,res,next)=>{
                 description: req.body.description,
                 salary: req.body.salary,
                 deadline: req.body.deadline,
-                company: user 
+                company: user,
+                location: req.body.location 
             })
             try{
                 job.save()

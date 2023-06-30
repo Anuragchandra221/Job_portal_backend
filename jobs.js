@@ -12,6 +12,7 @@ const job_schema = new mongoose.Schema({
     },
     description: String,
     salary: Number,
+    location: String,
     created_at: {
         type: Date,
         default: ()=>Date.now()
